@@ -1,0 +1,352 @@
+
+---
+title: "Tutorial_7_own_solutions_markdown"
+author: 
+  name: Manuel Schreiber
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    df_print: paged
+  html_notebook: default
+  latex_engine: pdflatex
+  pdf_document: default
+  header-includes:
+   - \usepackage{amsmath}
+   - \usepackage{amsfonts}
+---
+
+**Tutorial 7 Business Analytics - own solutions**
+
+R Markdown - The definitive guide (online book): https://bookdown.org/yihui/rmarkdown/
+Tidymodels Documentation: https://tidymodels.org
+
+```{r}
+#install.packages("tidymodels")
+
+## checking for updates of the tidyverse package
+#tidyverse_update()
+
+#install.packages("GGally")
+```
+
+
+### Loading Packages
+
+```{r}
+
+library(tidyverse) # collection of packages for data analysis including: ggplot2 (data visualization package), dplyr (data manipulation package), tidyr, readr (faster read.csv() functions that create tibble objects instead of data.frames), purrr, tibble (wrapper around data.frames for better printing), stringr, forcats
+
+library(lubridate) # tools to parse and manipuulate dates
+
+library(GGally) # ggplot2 extension (for a heat map plot)
+
+library(graphics) # base graphics (e.g. histogram)
+
+library(stats) # computing distribution functions, distribution quantiles; random number generation
+
+library(car) # companion to applied regression package
+
+library(lmtest) # testing linear regression models package
+
+library(aod) # analysis of overdispersed data package
+
+library(tidymodels) # collection of packages for modeling and machine learning
+
+
+ 
+```
+
+
+
+
+```{r}
+# getting the current WD
+getwd()
+```
+
+
+
+```{r}
+# changing the WD
+##setwd("/Users/Manu/Desktop/TUM Master Mgt & Technology/TUM WS 20/Business Analytics/Tutorials/Tutorial 7 Data Preparation")
+```
+
+*Controlling the size of plots/images*
+
+
+```{r}
+# The Markdown syntax is: ![caption](path/to/image)
+```
+
+The size of plots made in R can be controlled by the chunk option **fig.width** and **fig.height** (in inches). Equivalently, you can use the **fig.dim** option to specify the width and height in a numeric vector of length 2, e.g., fig.dim = c(8, 6) means fig.width = 8 and fig.height = 6. These options set the physical size of plots, and you can choose to display a different size in the output using chunk options **out.width** and **out.height**, e.g., out.width = "50%".
+
+![Attributes table](attributes.png){fig.dim=c(10,10)}
+
+
+## *Exercise 7.1*
+
+The data set (raw_data.csv) contains data from an online shop. Table 1 describes the attributes and values.
+
+### a) Load raw_data.csv and rename all attributes to match the “description” column in Table 1. Hint: read_delim(), rename()
+
+```{r}
+# read_delim() is amore general version of read_csv
+raw_data <- read_delim("raw_data.csv",delim = ";")
+
+head(raw_data)
+
+# getting all the feature names
+names(raw_data)
+
+
+```
+
+```{r}
+# renaming the column names:
+
+colnames(raw_data) <-  c("ID","order_date","delivery_date", "size", "price","tax","salutation","date_of_birth","state","return_shipment")
+
+names(raw_data)
+```
+
+
+### b) Correct the data types for all nominal attributes and assign the corresponding labels from the “comment” column in Table 1. Hint: mutate(), factor()
+
+
+
+```{r}
+# inspecting dimensionality, features names, data types and the first few values
+str(raw_data)  
+```
+
+The attributes/features "salutation", "state" and "return_shipment" are nominal attributes (simple distinction and no order).
+
+```{r}
+# getting the different values of the salutation attribute
+unique(raw_data$salutation);
+unique(raw_data$state);
+unique(raw_data$return_shipment)
+
+```
+
+
+**Nominal attributes:** 
+Values of Nominal attributes represent some category or state (simple distinction) and that's why nominal attributes also referred as categorical attributes and there is no order (rank, position) among values of a nominal attribute. Example : Binary Attributes : Binary data have only 2 values/states.
+
+```{r}
+# summary stats for all attributes
+summary(raw_data)
+```
+
+
+```{r}
+# the mutate() function creates, modifies or deletes columns
+
+# transforming the salutation variable so that we have 3 different classes/categories using the factor function
+
+# levels are the catagory/class values that the data vector takes on now, labels contains the new labels
+raw_data <- mutate(raw_data, salutation = factor(raw_data$salutation, levels =c(2,3,4), labels = c("Company", "Mr.", "Mrs."))) 
+
+
+
+head(raw_data$salutation)
+```
+```{r}
+# transforming the other two nominal attributes:
+raw_data <- mutate(raw_data, return_shipment = factor(raw_data$return_shipment, levels =c(0,1), labels = c("No", "Yes")))
+
+head(raw_data$return_shipment);
+
+raw_data <- mutate(raw_data, state = factor(raw_data$state, labels = c("BW", "BY", "BE", "BB", "HB", "HH", "HE", "MV", "NI", "NW", "RP", "SL", "SN", "ST", "SH", "TH")))
+
+head(raw_data$state)
+```
+
+```{r}
+summary(raw_data);
+
+head(raw_data)
+```
+
+
+### c) Correct the data type for the ordinal attribute size and assign the corresponding labels from the “comment” column in Table 1. Hint: toupper(), table()
+
+```{r}
+# tabulate the absolute frequencies of the attribute size
+table(raw_data$size);
+
+# display unique values of the attribute size
+unique(raw_data$size)
+
+```
+
+```{r}
+# size attribute values are converted form lower case to upper case with the toupper() function
+raw_data <- mutate(raw_data,size = toupper(size))
+
+head(raw_data$size)
+```
+
+
+### d) Correct the data types for all date attributes. Create separate attributes for weekday, year, month, day, and quarter of "order date". Hint: mutate(), across(), as_date() from package “lubridate”
+
+order date, delivery_date and date_of_birth should be dates but only order date was parsed correctly, because the others contain ‘?’. lubridate::as_date provides better date parsing than R’s standard as.date. mutate can be used with across function to perform similar mutations across multiple columns.
+
+```{r}
+# transforming the three data attributes
+##raw_data <- mutate(raw_data,across(.cols = c(order_date, delivery_date, date_of_birth), .fns = as_date))
+
+raw_data <- raw_data %>% mutate(across(.cols = c(order_date, delivery_date, date_of_birth), .fns = as_date))
+
+```
+
+
+
+
+### e) Find missing values (only NA), fill missing prices/tax with averages or remove the instances. Hint: mutate(), summarize(), across(), if_else(), na.omit()
+
+```{r}
+# boolean test for missing values of each value in the data set
+##is.na(raw_data)
+
+# sum and the percentage of missing values in the data set:
+sum(is.na(raw_data)); # 12 missing values
+
+mean(is.na(raw_data)) # 4 percent of the data set are missing
+
+```
+
+rewrite count NA cells by attribute function without pipe operator - unresolved!
+Purpose of the pipe operator: pipe operators can make code look cleaner and they make it easier to keep track of the flow of operations.
+
+```{r}
+# Find missing values (only NA)
+#summarize_all(sum(mutate_all(is.na(.)))) # rewritten version
+
+raw_data %>% mutate_all(is.na) %>% summarize_all(sum) #original version
+```
+
+The syntax of the "if_else()" function is: 
+if_else(condition, true, false, missing = NULL)
+
+```{r}
+# Filling the NA values ofthe attributes "price" and "tax" with the respective mean value of the respective attribute
+
+raw_data <- mutate(raw_data, tax = if_else(is.na(tax), mean(tax, na.rm=TRUE), tax), price = if_else(is.na(price), mean(price, na.rm=TRUE), price))
+
+
+```
+
+
+```{r}
+# checking for missing values again:
+sum(is.na(raw_data))
+```
+
+
+
+```{r}
+# Removing the instances/data points with NA values
+raw_data <- na.omit(raw_data)
+
+#raw_data %>% mutate_all(is.na) %>% summarize_all(sum)
+
+summarize(raw_data, across(.cols = everything(), .fns = ~sum(is.na(.))))
+```
+
+
+### f) Calculate a new attribute "delivery time" as the difference of order and delivery date in days. Inspect the values for errors and set the value to “NA” for corresponding instances. Hint: Negative delivery time is impossible.
+
+```{r}
+raw_data[c("order_date","delivery_date")]
+```
+
+
+```{r}
+# creating a new attribute "delivery time" and format it as a numeric object
+raw_data$delivery_time <- as.numeric(raw_data$delivery_date - raw_data$order_date, unit="days")
+
+raw_data$delivery_time;
+
+class(raw_data$delivery_time)
+```
+
+
+```{r}
+# setting negative values for delivery time to NA
+raw_data$delivery_time <- ifelse(raw_data$delivery_time >= 0, raw_data$delivery_time,"NA")
+
+raw_data$delivery_time;
+
+# tabulates the values and the frequencies of delivery time 
+# there are 5 negative values (now NA cells)
+count(raw_data, delivery_time, sort = TRUE)
+```
+
+
+
+### g) Plot a histogram for the new "delivery time" column. Then discretize (“bin”) it to levels "NA", "<= 5d", and "> 5d" in a new attribute “delivery_time_discrete” and plot a bar chart for it. Hint: hist(), barplot()
+
+```{r}
+# plotting a histogram of the delivery time attribute
+hist(raw_data$delivery_time)
+```
+
+```{r}
+# binning the data as described in the question using the __case_when__ method.
+raw_data <- mutate(raw_data, dt_binned = case_when(
+    is.na(delivery_time) ~ "NA",
+    delivery_time <= 5 ~ "<= 5d",
+    TRUE ~ "> 5d")
+)
+barplot(table(raw_data$dt_binned))
+```
+
+### h) Compute the correlation matrix for the numerical attributes only. Plot the matrix of the scatterplots. Plot the heat map of the correlation matrix. Hint: cor(), pairs(), ggcorr() from package “GGally”
+
+
+```{r}
+# To calculate the correlation of all numeric attributes, the numeric attributes are first selected and then passed through the correlation function
+
+# ggcorr() creates a correlation matrix which is plotted as a heat map:
+ggcorr(select(raw_data, where(is.numeric)));
+
+# regular correlation matrix of all (four) numeric attributes
+cor(select(raw_data, where(is.numeric)))
+
+```
+
+
+
+
+### i) Standardize all numerical values and again compute their correlation matrix. Hint: scale()
+
+**Standardization subtracts from each value the mean of the distribution and divides by the standard deviation. Thus the resulting values have zero mean and unit standard deviation. This can be achieved in R by using the __scale__ method.**
+
+```{r}
+#raw_data <- scale(select(raw_data, where(is.numeric)))
+
+#raw_data <-  mutate(select(raw_data, where(is.numeric)), (across(.cols = everything(), .fns = scale)))
+
+raw_data <- raw_data %>% select(where(is.numeric)) %>% mutate(across(.cols = everything(), .fns = scale))
+
+summarize(raw_data, across(everything(), .fns = c(~mean(., na.rm=T), ~sd(., na.rm=T))))
+
+```
+
+```{r}
+head(raw_data)
+```
+
+
+As can be observed the resulting columns have zero mean and unit standard deviation. The correlation can be calculated as before.
+
+```{r}
+corr <- raw_data %>% select(where(is.numeric)) %>% cor(use="pairwise.complete.obs")
+
+ggcorr(corr)
+```
+
+
